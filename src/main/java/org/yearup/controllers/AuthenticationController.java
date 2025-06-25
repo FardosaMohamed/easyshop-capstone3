@@ -22,22 +22,26 @@ import org.yearup.models.authentication.RegisterUserDto;
 import org.yearup.models.User;
 import org.yearup.security.jwt.JWTFilter;
 import org.yearup.security.jwt.TokenProvider;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
 @CrossOrigin
-@PreAuthorize("permitAll()")
 public class AuthenticationController {
 
     private final TokenProvider tokenProvider;
     private final AuthenticationManagerBuilder authenticationManagerBuilder;
     private UserDao userDao;
     private ProfileDao profileDao;
+    private final PasswordEncoder passwordEncoder;
 
-    public AuthenticationController(TokenProvider tokenProvider, AuthenticationManagerBuilder authenticationManagerBuilder, UserDao userDao, ProfileDao profileDao) {
+    public AuthenticationController(TokenProvider tokenProvider, AuthenticationManagerBuilder authenticationManagerBuilder, UserDao userDao, ProfileDao profileDao, PasswordEncoder passwordEncoder) {
         this.tokenProvider = tokenProvider;
         this.authenticationManagerBuilder = authenticationManagerBuilder;
         this.userDao = userDao;
         this.profileDao = profileDao;
+        this.passwordEncoder= passwordEncoder;
+
     }
 
     @RequestMapping(value = "/login", method = RequestMethod.POST)
@@ -95,4 +99,3 @@ public class AuthenticationController {
     }
 
 }
-
