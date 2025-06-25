@@ -3,6 +3,7 @@ package org.yearup.data.mysql;
 import org.springframework.stereotype.Component;
 import org.yearup.models.Product;
 import org.yearup.data.ProductDao;
+import org.yearup.data.ShoppingCartDao;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -13,35 +14,64 @@ import java.util.List;
 @Component
 public class MySqlProductDao extends MySqlDaoBase implements ProductDao
 {
-    public MySqlProductDao(DataSource dataSource)
+    private ShoppingCartDao shoppingCartDao;
+
+    public MySqlProductDao(DataSource dataSource,ShoppingCartDao shoppingCartDao)
     {
         super(dataSource);
+        this.shoppingCartDao = shoppingCartDao;
     }
 
     @Override
     public List<Product> search(Integer categoryId, BigDecimal minPrice, BigDecimal maxPrice, String color)
     {
         List<Product> products = new ArrayList<>();
+        StringBuilder sqlBuilder = new StringBuilder("SELECT * FROM products WHERE 1=1 "); // Start with 1=1 for easy appending
+        List<Object> params = new ArrayList<>();
 
-        String sql = "SELECT * FROM products " +
-                "WHERE (category_id = ? OR ? = -1) " +
-                "   AND (price <= ? OR ? = -1) " +
-                "   AND (color = ? OR ? = '') ";
+        // Add Category ID condition if provided and valid
+        if (categoryId != null && categoryId > 0) { // Assuming categoryId > 0 is valid
+            sqlBuilder.append(" AND category_id = ? ");
+            params.add(categoryId);
+        }
 
-        categoryId = categoryId == null ? -1 : categoryId;
-        minPrice = minPrice == null ? new BigDecimal("-1") : minPrice;
-        maxPrice = maxPrice == null ? new BigDecimal("-1") : maxPrice;
-        color = color == null ? "" : color;
+        // Add Min Price condition if provided and valid
+        // Using compareTo for BigDecimal: 0 if equal, >0 if this is greater, <0 if this is less
+        if (minPrice != null && minPrice.compareTo(BigDecimal.ZERO) >= 0) { // Ensure minPrice is 0 or positive
+            sqlBuilder.append(" AND price >= ? ");
+            params.add(minPrice);
+        }
+
+        // Add Max Price condition if provided and valid
+        if (maxPrice != null && maxPrice.compareTo(BigDecimal.ZERO) >= 0) { // Ensure maxPrice is 0 or positive
+            sqlBuilder.append(" AND price <= ? ");
+            params.add(maxPrice);
+        }
+
+        // Add Color condition if provided and not empty
+        if (color != null && !color.trim().isEmpty()) {
+            sqlBuilder.append(" AND color = ? ");
+            params.add(color.trim()); // Trim to handle accidental spaces
+        }
 
         try (Connection connection = getConnection())
         {
-            PreparedStatement statement = connection.prepareStatement(sql);
-            statement.setInt(1, categoryId);
-            statement.setInt(2, categoryId);
-            statement.setBigDecimal(3, minPrice);
-            statement.setBigDecimal(4, minPrice);
-            statement.setString(5, color);
-            statement.setString(6, color);
+            PreparedStatement statement = connection.prepareStatement(sqlBuilder.toString());
+
+            // Set parameters dynamically based on what was added to the list
+            for (int i = 0; i < params.size(); i++) {
+                Object param = params.get(i);
+                if (param instanceof Integer) {
+                    statement.setInt(i + 1, (Integer) param);
+                } else if (param instanceof BigDecimal) {
+                    statement.setBigDecimal(i + 1, (BigDecimal) param);
+                } else if (param instanceof String) {
+                    statement.setString(i + 1, (String) param);
+                } else {
+                    // Handle unexpected parameter types if necessary
+                    throw new RuntimeException("Unexpected parameter type: " + param.getClass().getName());
+                }
+            }
 
             ResultSet row = statement.executeQuery();
 
@@ -53,7 +83,7 @@ public class MySqlProductDao extends MySqlDaoBase implements ProductDao
         }
         catch (SQLException e)
         {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error searching products: " + e.getMessage(), e);
         }
 
         return products;
@@ -65,7 +95,7 @@ public class MySqlProductDao extends MySqlDaoBase implements ProductDao
         List<Product> products = new ArrayList<>();
 
         String sql = "SELECT * FROM products " +
-                    " WHERE category_id = ? ";
+                " WHERE category_id = ? ";
 
         try (Connection connection = getConnection())
         {
@@ -109,18 +139,18 @@ public class MySqlProductDao extends MySqlDaoBase implements ProductDao
         {
             throw new RuntimeException(e);
         }
-        return null;
+        return null; // Return null if no product is found
     }
 
     @Override
     public Product create(Product product)
     {
-
         String sql = "INSERT INTO products(name, price, category_id, description, color, image_url, stock, featured) " +
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
 
         try (Connection connection = getConnection())
         {
+            // Use PreparedStatement.RETURN_GENERATED_KEYS to get the auto-incremented ID
             PreparedStatement statement = connection.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS);
             statement.setString(1, product.getName());
             statement.setBigDecimal(2, product.getPrice());
@@ -134,23 +164,23 @@ public class MySqlProductDao extends MySqlDaoBase implements ProductDao
             int rowsAffected = statement.executeUpdate();
 
             if (rowsAffected > 0) {
-                // Retrieve the generated keys
                 ResultSet generatedKeys = statement.getGeneratedKeys();
-
                 if (generatedKeys.next()) {
-                    // Retrieve the auto-incremented ID
-                    int orderId = generatedKeys.getInt(1);
-
-                    // get the newly inserted category
-                    return getById(orderId);
+                    int newProductId = generatedKeys.getInt(1);
+                    // ✅ THE FIX: Set the generated ID on the product object directly
+                    product.setProductId(newProductId);
+                    System.out.println("DEBUG: Product created with ID: " + newProductId); // Add debug log
+                    return product; // Return the now-updated product object
                 }
             }
         }
         catch (SQLException e)
         {
-            throw new RuntimeException(e);
+            System.err.println("ERROR: SQL Exception during product creation: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Error creating product: " + e.getMessage(), e);
         }
-        return null;
+        return null; // Return null if creation failed or no ID generated
     }
 
     @Override
@@ -205,6 +235,27 @@ public class MySqlProductDao extends MySqlDaoBase implements ProductDao
         catch (SQLException e)
         {
             throw new RuntimeException(e);
+        }
+    }
+
+    // ✅ ADD THIS NEW METHOD IMPLEMENTATION
+    @Override
+    public void deleteProductsByCategoryId(int categoryId)
+    {
+        String sql = "DELETE FROM products WHERE category_id = ?;";
+
+        try (Connection connection = getConnection())
+        {
+            PreparedStatement statement = connection.prepareStatement(sql);
+            statement.setInt(1, categoryId);
+
+            statement.executeUpdate();
+        }
+        catch (SQLException e)
+        {
+            // This will likely throw an exception if the category doesn't exist,
+            // but for foreign key cascade, we only care that existing products are deleted.
+            throw new RuntimeException("Error deleting products for category ID: " + categoryId, e);
         }
     }
 
