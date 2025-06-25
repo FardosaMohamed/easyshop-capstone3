@@ -1,12 +1,14 @@
 package org.yearup.data.mysql;
 
-import org.junit.jupiter.api.BeforeAll;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired; // ✅ NEW: Import Autowired
+import org.yearup.data.ShoppingCartDao; // Import ShoppingCartDao
 import org.yearup.models.Product;
 
 import java.math.BigDecimal;
-import java.sql.SQLException;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -14,10 +16,14 @@ class MySqlProductDaoTest extends BaseDaoTestClass
 {
     private MySqlProductDao dao;
 
+    @Autowired // NEW: Autowire ShoppingCartDao for the test context
+    private ShoppingCartDao shoppingCartDao; // Declare shoppingCartDao field
+
     @BeforeEach
     public void setup()
     {
-        dao = new MySqlProductDao(dataSource);
+        //  THE FIX: Pass both dataSource and shoppingCartDao to the constructor
+        dao = new MySqlProductDao(dataSource, shoppingCartDao);
     }
 
     @Test
@@ -44,5 +50,6 @@ class MySqlProductDaoTest extends BaseDaoTestClass
         // assert
         assertEquals(expected.getPrice(), actual.getPrice(), "Because I tried to get product 1 from the database.");
     }
+
 
 }
