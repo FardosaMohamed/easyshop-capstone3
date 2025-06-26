@@ -11,7 +11,7 @@ import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.password.PasswordEncoder; // Keep this for the @Autowired field
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @EnableWebSecurity
@@ -22,35 +22,25 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final UserModelDetailsService userModelDetailsService;
-
-    // Autowire the PasswordEncoder bean from PasswordEncoderConfig
-    private final PasswordEncoder passwordEncoder; // Add this field
+    private final PasswordEncoder passwordEncoder;
 
     public WebSecurityConfig(
             TokenProvider tokenProvider,
             JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
             JwtAccessDeniedHandler jwtAccessDeniedHandler,
             UserModelDetailsService userModelDetailsService,
-            PasswordEncoder passwordEncoder // Add this to the constructor
+            PasswordEncoder passwordEncoder
     ) {
         this.tokenProvider = tokenProvider;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
         this.userModelDetailsService = userModelDetailsService;
-        this.passwordEncoder = passwordEncoder; // Initialize the field
+        this.passwordEncoder = passwordEncoder;
     }
 
-    // REMOVE THIS METHOD - it's no longer needed here as a non-bean method
-    // public PasswordEncoder passwordEncoder() {
-    //     return new BCryptPasswordEncoder();
-    // }
-
-
-    // ✅ This configures how Spring loads users and checks passwords
-    @Autowired // This annotation is for constructor/setter injection, not for the method itself
     public void configure(AuthenticationManagerBuilder auth) throws Exception {
         auth.userDetailsService(userModelDetailsService)
-                .passwordEncoder(passwordEncoder); // Use the autowired 'passwordEncoder' field
+                .passwordEncoder(passwordEncoder);
     }
 
     public void configure(WebSecurity web) {
@@ -69,8 +59,13 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .authorizeRequests()
+                // Public endpoints
                 .antMatchers("/login", "/register", "/categories", "/products","/products/**" ).permitAll()
-                .anyRequest().authenticated()
+                // Authenticated endpoints (explicitly listed for clarity, though `anyRequest().authenticated()` would catch them)
+                .antMatchers("/cart", "/cart/**").authenticated() // All /cart endpoints
+                .antMatchers("/profile").authenticated() // /profile endpoint
+                .antMatchers(HttpMethod.POST, "/orders").authenticated() // POST /orders specifically
+                .anyRequest().authenticated() // Fallback: ensure all other requests not explicitly permitted require auth
                 .and()
                 .apply(securityConfigurerAdapter());
     }
