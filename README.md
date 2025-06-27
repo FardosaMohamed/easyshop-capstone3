@@ -86,6 +86,28 @@ POST /categories, PUT /categories/{id}, DELETE /categories/{id}
 
 ---
 
+## 🧠 Backend Structure and Design
+
+### 📚 Layered Architecture
+- **Controllers** – Handle HTTP requests (entry points)
+- **Services** – Contain business logic
+- **DAOs** – Handle database access and queries
+- **Models** – Represent data (e.g., Product, User)
+- **Security** – JWT-based authentication and role protection
+
+### 🛠️ Spring Boot Features Used
+- Spring Boot Starter
+- Spring JDBC
+- Spring Security
+- Annotations like `@RestController`, `@Service`, `@Repository`, `@Autowired`
+
+### 🔐 JWT Authentication Flow
+1. User logs in with credentials
+2. JWT is returned
+3. Token must be sent in `Authorization` header for secure endpoints
+4. Spring filters validate the token automatically
+
+
 ## 🧪 Example API Interactions & Postman Tests
 
 ### A. 🔐 Admin Login
